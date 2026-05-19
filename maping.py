@@ -2,7 +2,7 @@ import pandas as pd
 import requests
 import json
 
-file_name = r'C:\MlProject\local\상록구 일동_통합_가게정보.csv'
+file_name = r'C:\MlProject\TeamProject04_Python\상록구 일동_통합_가게정보.csv'
 
 try:
     df = pd.read_csv(file_name, encoding='utf-8')
