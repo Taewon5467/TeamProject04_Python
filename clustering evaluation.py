@@ -8,7 +8,7 @@ from scipy.spatial.distance import squareform
 from scipy.spatial import ConvexHull, QhullError
 
 # 1. 파일 로드 및 주소 정제
-file_name = r'C:\MlProject\TeamProject04_Python\상록구 통합 가게정보.csv'
+file_name = r'상록구 통합 가게정보.csv'
 
 try:
     df = pd.read_csv(file_name, encoding='utf-8')
