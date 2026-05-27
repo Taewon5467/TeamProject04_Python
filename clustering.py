@@ -24,7 +24,7 @@ df['정제된_주소'] = df['주소'].astype(str).str.split(' ').str[:5].str.joi
 
 # 네이버 Cloud API 키 설정
 NAVER_CLIENT_ID = 'hymjc5hhjr'
-NAVER_CLIENT_SECRET = 'GoSPNaa2QmBu4WPTw4bNOlWvYWgGk76sYshHodDX'
+NAVER_CLIENT_SECRET = 'DCpgXMURtZgZ2HTQqywyvVxaoYj1A9Rx6M5G8ZdC'
 
 def get_naver_lat_lon(address):
     url = "https://maps.apigw.ntruss.com/map-geocode/v2/geocode"
@@ -50,11 +50,34 @@ df_clean = df.dropna(subset=['lat', 'lon']).copy()
 
 if not df_clean.empty:
     
-    # [핵심 로직] 거점 중심 기준 '최대 10분(2.5km)' 제한 계층적 군집화
+    # =========================================================================
+    # [논문 기반 핵심 로직] 거리-시간 변환 계수(DCF) 모델 적용
+    # =========================================================================
+    target_time_min = 10      # 배송 제한 시간 (10분)
+    target_time_hours = target_time_min / 60  # 시간 단위 변환 (1/6 시간)
     
-    robot_speed = 5          # 로봇 속도 (km/h)
-    target_time_min = 10      # 제한 시간 (분)
-    max_distance_km = robot_speed * (target_time_min / 60)  # 2.5 km
+    # 1) 논문 프레임워크 파라미터 설정
+    SF = 15.0  # Speed Factor: 로봇의 이상적인 주행 속도 (km/h)
+    CF = 1.35  # Circuity Factor: 도시 도로망 우회 계수 (직선거리 대비 실도로 거리 비율)
+    DF = 2.22  # Delay Factor: 신호 대기 및 돌발 정체 지연 계수
+    
+    # 2) DCF 계산 (단위: hours / km) -> 직선거리당 소요되는 실제 시간
+    # 공식: DCF = (CF * DF) / SF
+    DCF = (CF * DF) / SF
+    
+    # 3) DCF를 이용한 최대 허용 직선거리(Euclidean/Haversine Threshold) 도출
+    # 공식: Max Euclidean Distance = Actual Travel Time / DCF
+    max_distance_km = target_time_hours / DCF
+    
+    print(f"\n--- [DCF 기반 분석 파라미터] ---")
+    print(f"■ 로봇 이상 속도(SF): {SF} km/h")
+    print(f"■ 도로 우회 계수(CF): {CF}")
+    print(f"■ 보행/신호 지연 계수(DF): {DF}")
+    print(f"■ 최종 변환 계수(DCF): {DCF:.4f} hours/km")
+    print(f"■ 목표 제한 시간: {target_time_min}분")
+    print(f"■ 필터링 기준 최대 직선 거리: {max_distance_km*1000:.1f}m ({max_distance_km:.3f} km)")
+    print(f"---------------------------------\n")
+    # =========================================================================
     
     # 위경도를 라디안으로 변환
     df_clean['lat_rad'] = np.radians(df_clean['lat'])
@@ -65,13 +88,12 @@ if not df_clean.empty:
     dist_matrix = haversine_distances(coords_rad) * 6371.0088
     
     # 2. 계층적 군집화 (완전 연결법: Complete Linkage 적용)
-    # 군집 내 가장 먼 두 점의 거리가 max_distance_km(2.5km)를 넘지 않도록 강제 제약
+    # 군집 내 가장 먼 두 점의 거리가 DCF 기반 max_distance_km를 넘지 않도록 제약
     dist_array = squareform(dist_matrix)
     Z = linkage(dist_array, method='complete')
     
-    # 3. 임계치(2.5km) 기준으로 군집 자르기 (결과값은 1부터 시작하는 정수)
+    # 3. DCF 산출 임계치 기준으로 군집 자르기
     df_clean['cluster'] = fcluster(Z, t=max_distance_km, criterion='distance')
-    # =========================================================================
     
     locations = df_clean[['가게명', 'lat', 'lon', 'cluster']].to_dict('records')
     locations_json = json.dumps(locations, ensure_ascii=False)
@@ -121,7 +143,7 @@ if not df_clean.empty:
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>네이버 지도 - 로봇 최적 거점 분석</title>
+    <title>네이버 지도 - DCF 기반 로봇 최적 거점 분석</title>
     <script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId={NAVER_CLIENT_ID}"></script>
     <style>
         html, body {{ margin: 0; padding: 0; width: 100%; height: 100%; }}
@@ -133,7 +155,7 @@ if not df_clean.empty:
 <script>
     var map = new naver.maps.Map('map', {{
         center: new naver.maps.LatLng({center_lat}, {center_lon}),
-        zoom: 13
+        zoom: 14
     }});
 
     // 1. 가게 마커 표시
@@ -157,7 +179,7 @@ if not df_clean.empty:
         }})(marker, infoWindow);
     }}
 
-    // 2. 10분 반경 보장 다각형 영역 및 거점 표시
+    // 2. DCF 기준 반경 보장 다각형 영역 및 거점 표시
     var spots = {spots_json};
     for (var j = 0; j < spots.length; j++) {{
         var hullData = spots[j].hull;
@@ -170,7 +192,7 @@ if not df_clean.empty:
             var polygon = new naver.maps.Polygon({{
                 map: map,
                 paths: [polygonPath],
-                fillColor: '#10b981', // 안정감을 주는 초록색 영역으로 변경
+                fillColor: '#10b981', 
                 fillOpacity: 0.15,
                 strokeColor: '#059669',
                 strokeOpacity: 0.6,
@@ -208,7 +230,7 @@ if not df_clean.empty:
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(html_content)
 
-    print(f"🎯 [성공] 거점 기준 10분 보장 알고리즘 완료: {output_file}")
+    print(f"🎯 [성공] DCF 기반 10분 보장 거점 군집화 완료: {output_file}")
     print(f"생성된 최적의 배송 거점 개수: {len(spots)}개")
 else:
     print("❌ 좌표 변환된 데이터가 없습니다.")
