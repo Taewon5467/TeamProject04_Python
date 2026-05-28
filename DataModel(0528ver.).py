@@ -1,7 +1,3 @@
-"""
-안산시 배달 주문량 예측 - 개선 모델 + Train/Test × Before/After 비교
-"""
-
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -18,15 +14,12 @@ warnings.filterwarnings('ignore')
 plt.rc('font', family='Malgun Gothic')
 plt.rc('axes', unicode_minus=False)
 
-# ============================================================
-# 1. 데이터 로드
-# ============================================================
-file_path = 'DataSet/ansan_delivery_ml_dataset.csv'
+file_path = 'DataSet/ansan_delivery_ml_dataset.csv' 
 if not os.path.exists(file_path):
     file_path = 'ansan_delivery_ml_dataset.csv'
 df = pd.read_csv(file_path)
 
-vis_path = 'DataSet/OBS_ASOS_TIM_20260528085209.csv'
+vis_path = 'DataSet/OBS_ASOS_TIM_20260528085209.csv' # 0528 추가. 시정 데이터 파일
 if not os.path.exists(vis_path):
     vis_path = 'OBS_ASOS_TIM_20260528085209.csv'
 
@@ -40,12 +33,9 @@ if os.path.exists(vis_path):
     df_vis['시간'] = df_vis['일시'].dt.hour
     df_vis['시정'] = df_vis['시정(10m)']
     df = pd.merge(df, df_vis[['날짜','시간','시정']], on=['날짜','시간'], how='inner')
-    print("✅ 시정 데이터 병합 완료")
+    print("시정 데이터 병합 완료")
 
-# ============================================================
-# 2-A. BEFORE 피처 (원본 코드 그대로)
-# ============================================================
-holidays_2021 = [
+holidays_2021 = [ # 2021년 공휴일
     '2021-01-01',
     '2021-02-10','2021-02-11','2021-02-12','2021-02-13',
     '2021-03-01',
@@ -53,8 +43,8 @@ holidays_2021 = [
     '2021-06-06'
 ]
 df['Is_Holiday']  = df['날짜'].isin(holidays_2021).astype(int)
-df['Is_PeakTime'] = df['시간'].apply(lambda x: 1 if (11<=x<=13) or (17<=x<=20) else 0)
-df['Outdoor_Activity_Index'] = df['기온'] + (df['강수량']*2.5) + (df['적설']*4.0)
+df['Is_PeakTime'] = df['시간'].apply(lambda x: 1 if (11<=x<=13) or (17<=x<=20) else 0) # 점심/저녁 피크타임 여부
+df['Outdoor_Activity_Index'] = df['기온'] + (df['강수량']*2.5) + (df['적설']*4.0) # 야외활동지수 (낮을수록 나쁨)
 
 df_before = pd.get_dummies(df.copy(), columns=['요일'], drop_first=False)
 excl = ['날짜','시도','시군구','업종','주문건수']
@@ -65,8 +55,8 @@ y         = df_before['주문건수']
 
 X_tr_b, X_te_b, y_tr, y_te = train_test_split(
     X_before, y, test_size=0.2, random_state=42
-)
-
+) # 동일 random_state로 분리하여 이후 단계에서도 재사용 (y_tr, y_te)
+ 
 # Before Tuning
 gbr_raw = GradientBoostingRegressor(
     n_estimators=100, max_depth=5, learning_rate=0.1, random_state=42
@@ -75,8 +65,8 @@ gbr_raw.fit(X_tr_b, y_tr)
 p_tr_raw = gbr_raw.predict(X_tr_b)
 p_te_raw = gbr_raw.predict(X_te_b)
 
-# After Tuning (GridSearch, 원본 코드)
-print("GridSearchCV 실행 중 (원본)...")
+# After Tuning (GridSearchCV)
+print("GridSearchCV 실행 중...")
 param_grid = {
     'n_estimators'   : [150, 250, 350],
     'learning_rate'  : [0.03, 0.05],
@@ -94,20 +84,19 @@ p_tr_tuned = gbr_tuned.predict(X_tr_b)
 p_te_tuned = gbr_tuned.predict(X_te_b)
 print(f"최적 파라미터: {gs.best_params_}")
 
-# ============================================================
-# 2-B. AFTER 피처 (개선된 피처 + LightGBM)
-# ============================================================
+# AFTER 피처 (개선된 피처 + LightGBM)
 df2 = df.copy()
-df2['날짜_dt'] = pd.to_datetime(df2['날짜'])
+df2['날짜_dt'] = pd.to_datetime(df2['날짜']) # 날짜를 datetime으로 변환하여 월/일 추출
 df2['월'] = df2['날짜_dt'].dt.month
 df2['일'] = df2['날짜_dt'].dt.day
 
-df2['Is_Weekend']   = df2['요일'].isin(['토요일','일요일']).astype(int)
-df2['Is_Lunch']     = ((df2['시간']>=11)&(df2['시간']<=13)).astype(int)
-df2['Is_Dinner']    = ((df2['시간']>=17)&(df2['시간']<=20)).astype(int)
-df2['Is_LateNight'] = ((df2['시간']>=21)|(df2['시간']<=3)).astype(int)
+df2['Is_Weekend']   = df2['요일'].isin(['토요일','일요일']).astype(int) # 주말 여부
+df2['Is_Lunch']     = ((df2['시간']>=11)&(df2['시간']<=13)).astype(int) # 점심 피크타임 여부
+df2['Is_Dinner']    = ((df2['시간']>=17)&(df2['시간']<=20)).astype(int) # 저녁 피크타임 여부
+df2['Is_LateNight'] = ((df2['시간']>=21)|(df2['시간']<=3)).astype(int) # 야간 피크타임 여부
 
-df2['시간_sin'] = np.sin(2*np.pi*df2['시간']/24)
+# == AI 코드 ==
+df2['시간_sin'] = np.sin(2*np.pi*df2['시간']/24) # 시간의 주기성을 사인/코사인으로 표현
 df2['시간_cos'] = np.cos(2*np.pi*df2['시간']/24)
 df2['월_sin']   = np.sin(2*np.pi*df2['월']/12)
 df2['월_cos']   = np.cos(2*np.pi*df2['월']/12)
@@ -131,13 +120,13 @@ feat_after = [c for c in df2.columns if c not in excl2]
 
 X_after  = df2[feat_after]
 y_log    = df2['log_주문건수']
-
-# 동일 random_state로 분리 (y_tr, y_te 재사용)
+# ====
+# 동일 random_state로 분리
 X_tr_a, X_te_a, yl_tr, yl_te = train_test_split(
     X_after, y_log, test_size=0.2, random_state=42
 )
 
-print("LightGBM 학습 중 (개선)...")
+print("LightGBM 학습 중...")
 lgbm = lgb.LGBMRegressor(
     n_estimators=500, learning_rate=0.05, max_depth=6,
     num_leaves=40, min_child_samples=10,
@@ -153,9 +142,7 @@ lgbm.fit(
 p_tr_lgbm = np.expm1(lgbm.predict(X_tr_a))
 p_te_lgbm = np.expm1(lgbm.predict(X_te_a))
 
-# ============================================================
-# 3. 지표 계산
-# ============================================================
+# 지표 계산
 def metrics(y_true, y_pred):
     r2    = r2_score(y_true, y_pred)
     rmsle = np.sqrt(mean_squared_log_error(y_true, np.clip(y_pred, 0, None)))
@@ -183,9 +170,7 @@ print("="*70)
 print(results.to_string(index=False))
 print("="*70)
 
-# ============================================================
-# 4. 시각화
-# ============================================================
+# 시각화 설정 (AI)
 BLUE_TR   = '#378ADD'   # Train Before
 BLUE_TR2  = '#185FA5'   # Train After (GBR tuned)
 BLUE_TR3  = '#042C53'   # Train After (LightGBM)
