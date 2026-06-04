@@ -316,3 +316,130 @@ print("\n[개선 요약]")
 print(f"  Test R²    : {r2_te_raw:.4f} → {r2_te_lgbm:.4f}  (+{r2_te_lgbm-r2_te_raw:.4f})")
 print(f"  Test RMSLE : {rmsle_te_raw:.4f} → {rmsle_te_lgbm:.4f}  ({rmsle_te_lgbm-rmsle_te_raw:.4f})")
 print(f"  과적합(R² 격차) : {r2_tr_raw-r2_te_raw:.4f} → {r2_tr_lgbm-r2_te_lgbm:.4f}")
+
+import joblib
+
+# 모델과 피처 리스트를 딕셔너리로 묶어서 저장
+
+pipeline_save_data = {
+    'model': lgbm,
+    'features': feat_after
+}
+
+# 파일로 저장
+pipeline_path = 'lgbm_delivery_pipeline.pkl'
+joblib.dump(pipeline_save_data, pipeline_path)
+
+print("\n" + "="*50)
+print(f" 성공: 모델 및 피처 리스트가 '{pipeline_path}'에 통합 저장되었습니다.")
+print("="*50)
+
+# import os
+# import joblib
+# import numpy as np
+# import pandas as pd
+# import warnings
+# warnings.filterwarnings('ignore')
+
+# # =====================================================================
+# # 1. 통합 파이프라인 파일 로드
+# # =====================================================================
+# pipeline_path = 'lgbm_delivery_pipeline.pkl'
+
+# if not os.path.exists(pipeline_path):
+#     raise FileNotFoundError(f"'{pipeline_path}' 파일을 찾을 수 없습니다. 먼저 학습 코드를 실행해 주세요.")
+
+# # 저장했던 딕셔너리 불러오기
+# pipeline_data = joblib.load(pipeline_path)
+# model = pipeline_data['model']
+# trained_features = pipeline_data['features']
+
+# print(" 모델 및 피처 리스트 로드 완료!")
+# print(f"학습된 총 피처 개수: {len(trained_features)}개")
+
+
+# # =====================================================================
+# # 2. 신규 데이터 전처리 함수 (학습 당시의 파이프라인 완벽 재현)
+# # =====================================================================
+# def preprocess_pipeline(df_new, feat_order):
+#     df_res = df_new.copy()
+
+#     # 날짜 및 시간 파생 피처
+#     df_res['날짜_dt'] = pd.to_datetime(df_res['날짜'])
+#     df_res['월'] = df_res['날짜_dt'].dt.month
+#     df_res['일'] = df_res['날짜_dt'].dt.day
+
+#     # 피크타임 및 주말 여부 (기존 로직과 동일)
+#     # ※ 필요 시 공휴일(Is_Holiday) 리스트 비교 로직을 여기에 추가할 수 있습니다.
+#     df_res['Is_Holiday'] = 0  
+#     df_res['Is_PeakTime'] = df_res['시간'].apply(lambda x: 1 if (11<=x<=13) or (17<=x<=20) else 0)
+#     df_res['Is_Weekend']   = df_res['요일'].isin(['토요일','일요일']).astype(int)
+#     df_res['Is_Lunch']     = ((df_res['시간']>=11)&(df_res['시간']<=13)).astype(int)
+#     df_res['Is_Dinner']    = ((df_res['시간']>=17)&(df_res['시간']<=20)).astype(int)
+#     df_res['Is_LateNight'] = ((df_res['시간']>=21)|(df_res['시간']<=3)).astype(int)
+
+#     # 삼각함수를 이용한 주기성 인코딩 (AI 코드 영역)
+#     df_res['시간_sin'] = np.sin(2*np.pi*df_res['시간']/24)
+#     df_res['시간_cos'] = np.cos(2*np.pi*df_res['시간']/24)
+#     df_res['월_sin']   = np.sin(2*np.pi*df_res['월']/12)
+#     df_res['월_cos']   = np.cos(2*np.pi*df_res['월']/12)
+    
+#     day_map = {'월요일':0,'화요일':1,'수요일':2,'목요일':3,'금요일':4,'토요일':5,'일요일':6}
+#     df_res['요일_num'] = df_res['요일'].map(day_map)
+#     df_res['요일_sin'] = np.sin(2*np.pi*df_res['요일_num']/7)
+#     df_res['요일_cos'] = np.cos(2*np.pi*df_res['요일_num']/7)
+
+#     # 기상 상황 및 활동 지수 파생 변수
+#     df_res['기온_강수'] = df_res['기온'] * df_res['강수량']
+#     df_res['기온_제곱'] = df_res['기온'] ** 2
+#     df_res['강수_있음'] = (df_res['강수량']>0).astype(int)
+#     df_res['적설_있음'] = (df_res['적설']>0).astype(int)
+#     df_res['쾌적도']   = -np.abs(df_res['기온']-17.5)
+#     df_res['Outdoor_Activity_Index'] = df_res['기온']-(df_res['강수량']*2.5)-(df_res['적설']*4.0)
+
+#     # 요일 원-핫 인코딩
+#     df_res = pd.get_dummies(df_res, columns=['요일'], drop_first=False)
+
+#     # [핵심] 신규 데이터에 없는 요일 컬럼 자동 생성 및 데이터 정렬
+#     for col in feat_order:
+#         if col not in df_res.columns:
+#             df_res[col] = 0  # 신규 데이터에 없는 요일(예: 수집 안 된 요일)은 0으로 채움
+
+#     # 원본 학습 피처 순서와 완벽히 일치하도록 슬라이싱
+#     X_new = df_res[feat_order]
+#     return X_new
+
+
+# # =====================================================================
+# # 3. 새로운 데이터 입력 및 예측 테스트
+# # =====================================================================
+# # 외부 CSV를 읽어오거나 API 데이터를 받아올 때, 아래의 컬럼 구조 형태를 유지해야 합니다.
+# new_data = pd.DataFrame([
+#     {
+#         '날짜': '2026-06-10', '시간': 12, '요일': '수요일',
+#         '기온': 26.5, '강수량': 0.0, '적설': 0.0, '시정': 20000
+#     },
+#     {
+#         '날짜': '2026-06-10', '시간': 18, '요일': '수요일', 
+#         '기온': 19.0, '강수량': 12.5, '적설': 0.0, '시정': 4500
+#     }
+# ])
+
+# print("\n 입력 데이터 확인:")
+# print(new_data)
+
+# # 전처리 실행
+# X_test = preprocess_pipeline(new_data, trained_features)
+
+# # 예측 수행 및 로그 역전환(np.expm1) 적용
+# log_preds = model.predict(X_test)
+# real_preds = np.expm1(log_preds)
+
+# # 최종 결과 저장 및 출력
+# new_data['예측_주문건수'] = np.round(real_preds, 1)
+
+# print("\n" + "="*50)
+# print("  최종 예측 결과")
+# print("="*50)
+# print(new_data[['날짜', '시간', '요일', '기온', '강수량', '예측_주문건수']])
+# print("="*50)

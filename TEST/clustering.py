@@ -3,12 +3,12 @@ import requests
 import json
 import numpy as np
 from sklearn.metrics.pairwise import haversine_distances
-from scipy.cluster.hierarchy import linkage, fcluster, cophenet 
+from scipy.cluster.hierarchy import linkage, fcluster
 from scipy.spatial.distance import squareform
 from scipy.spatial import ConvexHull, QhullError
 
 # 1. 파일 로드 및 주소 정제
-file_name = r'상록구 통합 가게정보.csv'
+file_name = r'C:\MlProject\TeamProject04_Python\상록구 본오동_통합_가게정보.csv'
 
 try:
     df = pd.read_csv(file_name, encoding='utf-8')
@@ -49,19 +49,24 @@ df[['lat', 'lon']] = df['정제된_주소'].apply(get_naver_lat_lon)
 df_clean = df.dropna(subset=['lat', 'lon']).copy()
 
 if not df_clean.empty:
-
-    #거리-시간 변환 계수(DCF) 모델 적용
+    
+    # =========================================================================
+    # [논문 기반 핵심 로직] 거리-시간 변환 계수(DCF) 모델 적용
+    # =========================================================================
     target_time_min = 10      # 배송 제한 시간 (10분)
     target_time_hours = target_time_min / 60  # 시간 단위 변환 (1/6 시간)
     
-    SF = 15.0  #로봇의 이상적인 주행 속도 (km/h)
-    CF = 1.35  #도시 도로망 우회 계수 (직선거리 대비 실도로 거리 비율)
-    DF = 2.22  #신호 대기 및 돌발 정체 지연 계수
+    # 1) 논문 프레임워크 파라미터 설정
+    SF = 15.0  # Speed Factor: 로봇의 이상적인 주행 속도 (km/h)
+    CF = 1.35  # Circuity Factor: 도시 도로망 우회 계수 (직선거리 대비 실도로 거리 비율)
+    DF = 2.22  # Delay Factor: 신호 대기 및 돌발 정체 지연 계수
     
     # 2) DCF 계산 (단위: hours / km) -> 직선거리당 소요되는 실제 시간
+    # 공식: DCF = (CF * DF) / SF
     DCF = (CF * DF) / SF
     
     # 3) DCF를 이용한 최대 허용 직선거리(Euclidean/Haversine Threshold) 도출
+    # 공식: Max Euclidean Distance = Actual Travel Time / DCF
     max_distance_km = target_time_hours / DCF
     
     print(f"\n--- [DCF 기반 분석 파라미터] ---")
@@ -83,6 +88,7 @@ if not df_clean.empty:
     dist_matrix = haversine_distances(coords_rad) * 6371.0088
     
     # 2. 계층적 군집화 (완전 연결법: Complete Linkage 적용)
+    # 군집 내 가장 먼 두 점의 거리가 DCF 기반 max_distance_km를 넘지 않도록 제약
     dist_array = squareform(dist_matrix)
     Z = linkage(dist_array, method='complete')
     
@@ -226,57 +232,5 @@ if not df_clean.empty:
 
     print(f"🎯 [성공] DCF 기반 10분 보장 거점 군집화 완료: {output_file}")
     print(f"생성된 최적의 배송 거점 개수: {len(spots)}개")
-
-    # [평가 파트] (정상적인 위치로 이동 및 들여쓰기 교정 완료)
-    # 1. 코페네틱 상관계수 (CPCC) 분석
-    print("\n=======================================================")
-    print("📊 [평가 1] 코페네틱 상관계수 (CPCC) 분석")
-    print("=======================================================")
-    
-    c, coph_dists = cophenet(Z, dist_array)
-    
-    print(f"■ 산출된 코페네틱 상관계수: {c:.4f}")
-    if c >= 0.8:
-        print("■ 평가: 🌟 매우 우수 (원본 거리 데이터를 훌륭하게 보존하며 군집화됨)")
-    elif c >= 0.6:
-        print("■ 평가: 🟢 보통 (거리 데이터가 어느 정도 보존됨)")
-    else:
-        print("■ 평가: ⚠️ 낮음 (완전 연결법 적용 과정에서 거리 왜곡이 발생했을 수 있음)")
-
-    # 2. 물리적 거리 제약 실효성 검증
-    print("\n=======================================================")
-    print("🛠 [평가 2] 물리적 거리 제약(10분 배달 보장) 실효성 검증")
-    print("=======================================================")
-    
-    violation_count = 0
-    max_observed_dist_km = 0
-    
-    for cluster_id in unique_clusters:
-        cluster_coords = df_clean[df_clean['cluster'] == cluster_id][['lat_rad', 'lon_rad']].values
-        
-        if len(cluster_coords) > 1:
-            pair_dists = haversine_distances(cluster_coords) * 6371.0088
-            cluster_max_dist = pair_dists.max()
-            
-            if cluster_max_dist > max_observed_dist_km:
-                max_observed_dist_km = cluster_max_dist
-                
-            if cluster_max_dist > max_distance_km:
-                violation_count += 1
-                
-    print(f"■ 목표 제한 거리 (Threshold) : {max_distance_km:.4f} km")
-    print(f"■ 생성된 군집 내 실제 최대 거리: {max_observed_dist_km:.4f} km")
-    print(f"■ 제한 거리를 초과한 군집 수   : {violation_count}개")
-    
-    if violation_count == 0:
-        print("■ 평가: 🎯 완벽함! 모든 거점(군집)이 10분 배송 제약 거리를 100% 만족합니다.")
-    else:
-        print("■ 평가: ❌ 주의! 제약 거리를 초과한 군집이 존재합니다. (임계치 조정 필요)")
-    print("=======================================================\n")
-
-# 최종 예외 처리 (데이터가 없는 경우)
 else:
     print("❌ 좌표 변환된 데이터가 없습니다.")
-
-#python -m http.server 8000
-#http://localhost:8000/naver_store_map.html
