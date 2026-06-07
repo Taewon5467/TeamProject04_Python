@@ -11,8 +11,8 @@ if not NAVER_CLIENT_ID or not NAVER_CLIENT_SECRET:
     raise EnvironmentError("❌ .env 파일에 API 키를 입력해 주세요.")
 
 # 파일 경로
-FILE_RAW        = r'DataSet\상록구 본오동_통합_가게정보.csv'
-FILE_GEO_CACHED = r'DataSet\상록구 본오동_통합_가게정보_좌표추가.csv'
+FILE_RAW        = r'DataSet\상록구 통합 가게정보.csv'
+FILE_GEO_CACHED = r'DataSet\상록구 상록구 통합 가게정보_좌표추가.csv'
 PIPELINE_PATH   = 'lgbm_delivery_pipeline.pkl'
 OUTPUT_HTML     = 'naver_store_map.html'
 OUTPUT_SIM_DIR  = 'simulation_results'

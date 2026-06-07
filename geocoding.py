@@ -26,7 +26,14 @@ def _fetch_single(index, address):
 def load_with_geocoding():
     if os.path.exists(FILE_GEO_CACHED):
         print(f"📦 캐시 파일 로드: {FILE_GEO_CACHED}")
-        return _read_csv(FILE_GEO_CACHED)
+        df_cached = _read_csv(FILE_GEO_CACHED)
+        # 캐시에 주소 컬럼이 없으면 원본에서 병합
+        if '주소' not in df_cached.columns and os.path.exists(FILE_RAW):
+            print("⚠️  캐시에 '주소' 컬럼 없음 → 원본에서 병합합니다.")
+            df_raw = _read_csv(FILE_RAW)
+            if '가게명' in df_cached.columns and '가게명' in df_raw.columns:
+                df_cached = df_cached.merge(df_raw[['가게명', '주소']], on='가게명', how='left')
+        return df_cached
 
     print(f"🔍 원본 파일 로드: {FILE_RAW}")
     df = _read_csv(FILE_RAW)

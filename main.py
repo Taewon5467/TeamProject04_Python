@@ -1,4 +1,6 @@
 import argparse
+import sys
+import time
 from config import DEFAULT_DATE, DEFAULT_WEEKDAY, DEFAULT_TEMP, DEFAULT_RAIN, DEFAULT_SNOW, DEFAULT_VIS
 from geocoding      import load_with_geocoding
 from clustering     import run_clustering, build_spots, evaluate_clustering
@@ -22,18 +24,18 @@ def parse_args():
 
 def main():
     args = parse_args()
-
+ 
     print(f"\n[1/5] 좌표 변환")
     df_clean = load_with_geocoding()
-
+ 
     print(f"\n[2/5] 군집화")
     df_clean, Z, max_dist_km = run_clustering(df_clean)
     spots = build_spots(df_clean)
     print(f"  → 거점 {len(spots)}개 생성")
-
+ 
     print(f"\n[3/5] ML 예측")
     model, features = load_pipeline()
-
+ 
     if model:
         hourly_demand = run_simulation(model, features,
                                        args.date, args.weekday,
@@ -42,31 +44,40 @@ def main():
         spots = assign_robots(spots, hourly_demand)
         print(f"  → 피크: {int(hourly_demand.idxmax())}시 ({hourly_demand.max():.1f}건)")
         print(f"  → 평균: {hourly_demand.mean():.1f}건")
-
+ 
         if not args.no_save:
             print(f"\n[4/5] 결과 저장")
             save_simulation_result(hourly_demand, args.date, args.weekday)
     else:
         for spot in spots:
             spot['robots_peak'] = spot['robots_avg'] = '?'
-
+ 
     print(f"\n[5/5] HTML 생성")
     generate_html(df_clean, spots, max_dist_km)
-
+ 
     open_map_in_browser(port=8000)
-    
+ 
     print(f"  기온: {args.temp} / 강수량: {args.rain}")
-
-    # 서버가 살아있어야 하므로 메인 스레드 유지
-    input("\n🌐 서버 실행 중... 종료하려면 Enter를 누르세요.")
-
+ 
     metrics = evaluate_clustering(df_clean, Z, max_dist_km)
+ 
+    # ── 🛠️ Windows 및 GUI 런처 호환 종료 대기 로직으로 수정 ──
+    print("\n🌐 서버 실행 중 | 런처: [서버 종료] 버튼 | 터미널: Ctrl+C")
+    
+    try:
+        while True:
+            # 0.5초마다 짧게 쉬면서 대기합니다.
+            # 이 상태여야 Windows OS가 터미널의 Ctrl+C나 런처의 강제 종료 신호를 가로채서 처리할 수 있습니다.
+            time.sleep(0.5)
+            
+    except (KeyboardInterrupt, SystemExit):
+        # Ctrl+C 혹은 런처의 종료 신호가 들어왔을 때 실행
+        pass
+
+    print("\n⏹  서버 종료")
     print(f"\n📊 CPCC: {metrics['cpcc']} | 위반 군집: {metrics['violation_count']}개")
     print("✅ 완료\n")
-
-
+ 
+ 
 if __name__ == "__main__":
     main()
-    
-#python -m http.server 8000
-#http://localhost:8000/naver_store_map.html
