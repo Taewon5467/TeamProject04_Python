@@ -1,6 +1,4 @@
-# .env, CSV, pkl 등 제외 목록
+# .env, .html등 제외 목록
 .env
-*.pkl
-*.csv
 *.html
 __pycache__/
