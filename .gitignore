@@ -1,4 +1,6 @@
 # .env, .html등 제외 목록
 .env
 *.html
+.venv/
 __pycache__/
+*.pyc
