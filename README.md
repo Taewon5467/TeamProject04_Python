@@ -14,11 +14,13 @@
 
 ## 🛠️기술 스택 (Tech Stack)
 
-- **Language:** Python 3.10+
+- **Language:** Python 3.10+, JavaScript, HTML
 - **Data Analysis & ML:** Pandas, NumPy, Scikit-learn, XGBoost, LightGBM
 - **Data Crawling:** Selenium, Requests, BeautifulSoup
 - **Visualization:** Matplotlib, Seaborn
 - **Environment & Tools:** Git, GitHub, VS Code
+- **API:** Naver Maps
+- **GUI:** Tkinter
 
 ## 💡주요 기능 (Key Features)
 
