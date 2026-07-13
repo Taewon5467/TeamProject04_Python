@@ -9,13 +9,14 @@ from sklearn.metrics.pairwise import haversine_distances
 from scipy.cluster.hierarchy import linkage, fcluster, cophenet 
 from scipy.spatial.distance import squareform
 from scipy.spatial import ConvexHull, QhullError
+import sys
 
 # =========================================================================
 # 파일 경로 및 API 키 설정
 # =========================================================================
 file_name = r'DataSet\상록구 본오동_통합_가게정보.csv'
-geo_saved_file_name = r'DataSet\상록구 본오동_통합_가게정보_좌표추가.csv'
-ml_file_name = r'DataSet\ansan_delivery_ml_dataset.csv'
+geo_saved_file_name = r'DataSet\상록구 상록구 통합 가게정보_좌표추가.csv'
+ml_file_name = r'DataSet\ansan_delivery_2021_clean.csv'
 
 NAVER_CLIENT_ID = 'hymjc5hhjr'
 NAVER_CLIENT_SECRET = 'DCpgXMURtZgZ2HTQqywyvVxaoYj1A9Rx6M5G8ZdC'
@@ -288,11 +289,11 @@ if not df_clean.empty:
             position: new naver.maps.LatLng(spots[j].lat, spots[j].lon),
             map: map,
             icon: {{
-                content: '<div style="background:#10b981; color:white; padding:4px 6px; border-radius:4px; font-family:sans-serif; border:1px solid white; box-shadow: 0px 2px 4px rgba(0,0,0,0.3); white-space:nowrap; text-align:center; line-height:1.3;">' +
-                         '<div style="font-size:11px; font-weight:bold; margin-bottom:1px;">거점 #' + (j+1) + ' (' + spots[j].count + '개)</div>' +
-                         '<div style="font-size:10px; color:#ffeb3b; font-weight:bold;">피크 ' + spots[j].robots_peak + '대 | 평시 ' + spots[j].robots_avg + '대</div>' +
+                content: '<div style="background:#10b981; color:white; padding:8px 12px; border-radius:6px; font-family:sans-serif; border:2px solid white; box-shadow: 0px 3px 6px rgba(0,0,0,0.4); white-space:nowrap; text-align:center; line-height:1.5;">' +
+                         '<div style="font-size:18px; font-weight:bold; margin-bottom:3px;">거점 #' + (j+1) + ' (' + spots[j].count + '개)</div>' +
+                         '<div style="font-size:16px; color:#ffeb3b; font-weight:bold;">피크 ' + spots[j].robots_peak + '대 | 평시 ' + spots[j].robots_avg + '대</div>' +
                          '</div>',
-                anchor: new naver.maps.Point(40, 15)
+                anchor: new naver.maps.Point(55, 22)
             }}
         }});
     }}

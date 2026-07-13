@@ -90,18 +90,18 @@ def generate_html(df_clean, spots, max_dist_km):
             right: 10px;
             background: rgba(15,23,42,0.92);
             color: white;
-            padding: 12px 14px;
+            padding: 14px 16px;
             border-radius: 10px;
             font-family: sans-serif;
             font-size: 12px;
             border: 1px solid #334155;
             box-shadow: 0 4px 16px rgba(0,0,0,0.5);
             z-index: 1000;
-            min-width: 180px;
+            min-width: 210px;
             user-select: none;
         }}
         #legend .legend-title {{
-            font-size: 11px;
+            font-size: 16px;
             font-weight: bold;
             color: #94a3b8;
             margin-bottom: 8px;
@@ -118,15 +118,15 @@ def generate_html(df_clean, spots, max_dist_km):
             opacity: 0.8;
         }}
         #legend .legend-dot {{
-            width: 11px;
-            height: 11px;
+            width: 13px;
+            height: 13px;
             border-radius: 50%;
             border: 1.5px solid rgba(255,255,255,0.5);
             flex-shrink: 0;
         }}
         #legend .legend-label {{
             flex: 1;
-            font-size: 12px;
+            font-size: 16px;
         }}
 
         /* ── 토글 스위치 ── */
@@ -227,6 +227,35 @@ def generate_html(df_clean, spots, max_dist_km):
     // ── 거점: 다각형 + 커버리지 원 + 라벨 ────────────────────
     var spots = {spots_json};
     var coverageRadius = {coverage_radius_m};
+    var spotMarkers = [];  // 줌 레벨별 라벨 전환용 저장소
+    var ZOOM_THRESHOLD = 16;  // 이 줌 이상일 때만 상세 라벨 표시
+
+    function makeCompactIcon(spot, color, idx) {{
+    return {{
+        content:
+            '<div style="background:#0f172a;color:' + color + ';' +
+            'width:34px;height:34px;border-radius:50%;border:3px solid ' + color + ';' +
+            'font-family:sans-serif;font-size:17px;font-weight:bold;' +
+            'box-shadow:0 3px 8px rgba(0,0,0,0.6);' +
+            'display:flex;align-items:center;justify-content:center;">' +
+            (idx + 1) + '</div>',
+        anchor: new naver.maps.Point(17, 17)
+    }};
+}}
+
+    function makeFullIcon(spot, color, idx) {{
+    return {{
+        content:
+            '<div style="background:#0f172a;color:white;padding:12px 16px;border-radius:8px;' +
+            'font-family:sans-serif;border:3px solid ' + color + ';' +
+            'box-shadow:0 5px 10px rgba(0,0,0,0.5);white-space:nowrap;text-align:center;line-height:1.7;">' +
+            '<div style="font-size:22px;font-weight:bold;color:' + color + ';margin-bottom:5px;">' +
+            '거점 #' + (idx + 1) + ' (' + spot.count + '개 소속)</div>' +
+            '<div style="font-size:19px;color:#fde047;font-weight:bold;">' +
+            '🤖 피크 ' + spot.robots_peak + '대 | 평시 ' + spot.robots_avg + '대</div></div>',
+        anchor: new naver.maps.Point(70, 26)
+    }};
+}}
 
     spots.forEach(function(spot, j) {{
         var baseColor = dongColorMap[spot.dong] || '#3b82f6';
@@ -247,7 +276,7 @@ def generate_html(df_clean, spots, max_dist_km):
             }});
         }}
 
-        // 커버리지 원 — dongCircles에 등록
+        // 커버리지 원
         var circle = new naver.maps.Circle({{
             map: map,
             center: new naver.maps.LatLng(spot.lat, spot.lon),
@@ -263,21 +292,27 @@ def generate_html(df_clean, spots, max_dist_km):
             dongCircles[spot.dong].push(circle);
         }}
 
-        // 거점 라벨
-        new naver.maps.Marker({{
+        // 거점 라벨 (초기 줌 레벨에 맞춰 컴팩트/상세 아이콘 결정)
+        var initialIcon = map.getZoom() >= ZOOM_THRESHOLD
+            ? makeFullIcon(spot, baseColor, j)
+            : makeCompactIcon(spot, baseColor, j);
+
+        var labelMarker = new naver.maps.Marker({{
             position: new naver.maps.LatLng(spot.lat, spot.lon),
             map: map,
-            icon: {{
-                content:
-                    '<div style="background:#0f172a;color:white;padding:5px 8px;border-radius:6px;' +
-                    'font-family:sans-serif;border:2px solid ' + baseColor + ';' +
-                    'box-shadow:0 4px 6px rgba(0,0,0,0.4);white-space:nowrap;text-align:center;line-height:1.4;">' +
-                    '<div style="font-size:11px;font-weight:bold;color:' + baseColor + ';margin-bottom:2px;">' +
-                    '거점 #' + (j+1) + ' (' + spot.count + '개 소속)</div>' +
-                    '<div style="font-size:10px;color:#fde047;font-weight:bold;">' +
-                    '🤖 피크 ' + spot.robots_peak + '대 | 평시 ' + spot.robots_avg + '대</div></div>',
-                anchor: new naver.maps.Point(40, 15)
-            }}
+            icon: initialIcon
+        }});
+        spotMarkers.push({{ marker: labelMarker, spot: spot, color: baseColor, idx: j }});
+    }});
+
+    // 줌 변경 시 라벨 아이콘 전환
+    naver.maps.Event.addListener(map, 'zoom_changed', function() {{
+        var zoom = map.getZoom();
+        spotMarkers.forEach(function(item) {{
+            var icon = zoom >= ZOOM_THRESHOLD
+                ? makeFullIcon(item.spot, item.color, item.idx)
+                : makeCompactIcon(item.spot, item.color, item.idx);
+            item.marker.setIcon(icon);
         }});
     }});
 
